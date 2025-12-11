@@ -1,5 +1,4 @@
 name: Sync to Hugging Face Space
-
 on:
   push:
     branches: [ main ]
@@ -8,30 +7,23 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true  # <--- FIX 1: Actually download the large file
 
-      - name: Install Git Xet Extension
-        run: |
-          # Official HF install script for Linux (Actions runner)
-          curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
-          # Hook it into Git
-          git xet install
-          # Verify (should print version, e.g., v0.2.0+)
-          git xet --version
-
-      - name: Track Binaries & Push to HF Space
+      - name: Push to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
+          
+          # <--- FIX 2: Install LFS so Hugging Face accepts the big model
+          git lfs install
+          git lfs track "*.glb"
+          
+          # Add remote and push
           git remote add space https://hf:${HF_TOKEN}@huggingface.co/spaces/izgust/alin || true
-          
-          # Standard Git: Add everything (Xet auto-handles model.glb)
-          git add .
-          git commit -m "sync repo with binaries via xet" || echo "no changes"
-          
-          # Push (Xet uploads binary to storage)
-          git push space main --force
+          git push space HEAD:main --force

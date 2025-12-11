@@ -18,6 +18,7 @@ app.use(express.static(join(__dirname, 'dist')));
 // Secure API Proxy
 app.post('/api/chat', async (req, res) => {
     try {
+        // NOTE: The HF_TOKEN environment variable MUST be set in your Space Settings (Variables section)
         const hfToken = process.env.HF_TOKEN;
         if (!hfToken) {
             console.error('HF_TOKEN is missing');
@@ -25,7 +26,6 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // We use the Llama-3.2-3B model which is fast and reliable
-        // Note: You can switch this to any model your token has access to
         const response = await fetch("https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct", {
             method: "POST",
             headers: {
@@ -50,7 +50,8 @@ app.post('/api/chat', async (req, res) => {
 });
 
 // Fallback for SPA routing (serve index.html for unknown routes)
-app.get('*', (req, res) => {
+// *** FIX APPLIED HERE: Replaced '*' with '/{*any}' for Express v5 compatibility ***
+app.get('/{*any}', (req, res) => { 
     res.sendFile(join(__dirname, 'dist', 'index.html'));
 });
 

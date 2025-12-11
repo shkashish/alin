@@ -9,6 +9,14 @@ const __dirname = dirname(__filename);
 const app = express();
 const port = process.env.PORT || 7860;
 
+// **********************************************
+// FIX #1: Serve the 'public' directory from the root URL '/'
+// This allows the frontend to request /model.glb and get the file.
+// IMPORTANT: This middleware should come BEFORE the 'dist' middleware
+// if there are potential filename conflicts.
+app.use(express.static(join(__dirname, 'public')));
+// **********************************************
+
 // Parse JSON bodies
 app.use(express.json());
 
@@ -49,11 +57,13 @@ app.post('/api/chat', async (req, res) => {
     }
 });
 
-// Fallback for SPA routing (serve index.html for unknown routes)
-// *** FIX APPLIED HERE: Replaced '*' with '/{*any}' for Express v5 compatibility ***
+// **********************************************
+// FIX #2: Fallback for SPA routing (serve index.html for unknown routes)
+// Corrected from app.get('*') to app.get('/{*any}') for Express v5 compatibility.
 app.get('/{*any}', (req, res) => { 
     res.sendFile(join(__dirname, 'dist', 'index.html'));
 });
+// **********************************************
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);

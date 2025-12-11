@@ -14,11 +14,14 @@ jobs:
 
       - name: Install Git Xet Extension
         run: |
+          # Official HF install script for Linux (Actions runner)
           curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
+          # Hook it into Git
           git xet install
+          # Verify (should print version, e.g., v0.2.0+)
           git xet --version
 
-      - name: Track Binary with Xet and Push
+      - name: Track Binaries & Push to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -26,9 +29,9 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git remote add space https://hf:${HF_TOKEN}@huggingface.co/spaces/izgust/alin || true
           
-          # Explicitly add the binary file to Xet (converts it to pointer)
-          git xet add public/model.glb
-          git commit -m "track model.glb with xet" || true
+          # Standard Git: Add everything (Xet auto-handles model.glb)
+          git add .
+          git commit -m "sync repo with binaries via xet" || echo "no changes"
           
-          # Push with Xet handling
+          # Push (Xet uploads binary to storage)
           git push space main --force

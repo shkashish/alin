@@ -1,16 +1,17 @@
 name: Sync to Hugging Face Space
-
 on:
   push:
-    branches: [ main ]   # or master, whatever your default branch is
+    branches: [ main ]
 
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout source
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true  # <--- FIX 1: Actually download the large file
 
       - name: Push to HF Space
         env:
@@ -18,5 +19,11 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git remote add space https://hf:${HF_TOKEN}@huggingface.co/spaces/izgust/alin || echo "remote exists"
-          git push space main --force
+          
+          # <--- FIX 2: Install LFS so Hugging Face accepts the big model
+          git lfs install
+          git lfs track "*.glb"
+          
+          # Add remote and push
+          git remote add space https://hf:${HF_TOKEN}@huggingface.co/spaces/izgust/alin || true
+          git push space HEAD:main --force

@@ -2,7 +2,7 @@ name: Sync to Hugging Face Space
 
 on:
   push:
-    branches: [ main ]   # or master, whatever your default branch is
+    branches: [ main ]
 
 jobs:
   sync:
@@ -12,11 +12,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Push to HF Space
+      - name: Push to HF Space (with Xet for binaries)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-          git remote add space https://hf:${HF_TOKEN}@huggingface.co/spaces/izgust/alin || echo "remote exists"
-          git push space main --force
+
+          git remote add space https://hf:${HF_TOKEN}@huggingface.co/spaces/izgust/alin || true
+          
+          # This single command handles the binary file (model.glb) correctly
+          git push space main --force --no-verify

@@ -12,14 +12,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Push to HF Space (with Xet for binaries)
+      - name: Install Git Xet for binaries
+        run: |
+          # Install Git Xet extension (HF official script for Linux)
+          curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
+          git xet install
+          git xet --version  # Verify
+
+      - name: Push to HF Space (Xet handles model.glb automatically)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-
           git remote add space https://hf:${HF_TOKEN}@huggingface.co/spaces/izgust/alin || true
-          
-          # This single command handles the binary file (model.glb) correctly
-          git push space main --force --no-verify
+          git push space main --force

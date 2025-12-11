@@ -34,7 +34,8 @@ app.post('/api/chat', async (req, res) => {
         }
 
         // We use the Llama-3.2-3B model which is fast and reliable
-        const response = await fetch("https://router.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct", {
+        const modelId = "mistralai/Mistral-7B-Instruct-v0.2"; // <-- CHANGE THIS LINE
+        const response = await fetch(`https://router.huggingface.co/models/${modelId}`, {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${hfToken}`,

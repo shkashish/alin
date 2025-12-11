@@ -12,14 +12,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Git Xet for binaries
+      - name: Install Git Xet Extension
         run: |
-          # Install Git Xet extension (HF official script for Linux)
+          # Official HF install for Linux (ubuntu runner)
           curl --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/huggingface/xet-core/refs/heads/main/git_xet/install.sh | sh
+          # Install the extension into Git
           git xet install
-          git xet --version  # Verify
+          git xet --version  # Verify (should print version)
 
-      - name: Push to HF Space (Xet handles model.glb automatically)
+      - name: Push to HF Space (Xet auto-handles binaries)
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |

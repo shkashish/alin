@@ -1,13 +1,6 @@
+
 import { useEffect } from 'react'
 import { useStore } from './useStore'
-
-const API_KEY = "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"
-
-// Using the OpenAI-compatible endpoint as requested.
-// Direct URL because Vite proxy only works in dev mode. 
-// We are accessing the model directly via the Hugging Face Inference API.
-const PROXY_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct/v1/chat/completions"
-const MODEL_ID = "meta-llama/Llama-3.2-3B-Instruct"
 
 export function useAI() {
     const messages = useStore(state => state.messages)
@@ -20,46 +13,43 @@ export function useAI() {
         if (activeMessage) {
             setLoading(true)
             const fetchResponse = async () => {
+                console.log("[Backend] Connecting to /api/chat...")
+
                 try {
-                    const res = await fetch(PROXY_URL, {
-                        method: "POST",
+                    const res = await fetch('/api/chat', {
+                        method: 'POST',
                         headers: {
-                            Authorization: `Bearer ${API_KEY}`,
-                            "Content-Type": "application/json",
+                            'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            model: MODEL_ID,
-                            messages: [
-                                {
-                                    role: "system",
-                                    content: "You are an ancient sage of profound wisdom. Respond to the user’s thought in 1-2 short, poetic sentences – offer gentle, insightful guidance that inspires growth and peace, like a seed of enlightenment. Be concise, empathetic, and timeless."
-                                },
-                                {
-                                    role: "user",
-                                    content: activeMessage.text
-                                }
-                            ],
-                            max_tokens: 100,
-                            temperature: 0.7,
-                            stream: false
-                        }),
+                            inputs: `You are an ancient sage.Respond in 1 - 2 short, poetic, wise sentences to: "${activeMessage.text}"`,
+                            parameters: {
+                                max_new_tokens: 100,
+                                temperature: 0.7,
+                                return_full_text: false
+                            }
+                        })
                     })
 
                     if (!res.ok) {
-                        const errText = await res.text()
-                        throw new Error(`API Error: ${res.status} ${res.statusText} - ${errText}`)
+                        const err = await res.text()
+                        throw new Error(`Server Error: ${res.status} - ${err} `)
                     }
 
                     const data = await res.json()
-                    const text = data.choices?.[0]?.message?.content
+                    // HF Inference API returns array of { generated_text }
+                    // Or sometimes just { generated_text } depending on endpoint version
+                    // Our proxy forwards it raw
+                    const text = Array.isArray(data) ? data[0]?.generated_text : data.generated_text
 
-                    if (!text) throw new Error("No output from AI")
+                    if (!text) throw new Error("Empty response from AI")
 
                     setResponse(activeMessage.id, text.trim())
 
                 } catch (error) {
                     console.error("AI Error:", error)
-                    setResponse(activeMessage.id, `Error: The spirits could not connect (${error instanceof Error ? error.message : 'Unknown'}).`)
+                    const errMsg = error instanceof Error ? error.message : "Unknown"
+                    setResponse(activeMessage.id, `[AI Error] The wind is silent. (${errMsg})`)
                 } finally {
                     setLoading(false)
                 }

@@ -1,18 +1,22 @@
 name: Sync to Hugging Face Space
 
-on: [push]
+on:
+  push:
+    branches: [ main ]   # or master, whatever your default branch is
 
 jobs:
-  sync-to-hf:
+  sync:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
+
       - name: Push to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git remote add hf https://$HF_TOKEN@huggingface.co/spaces/izgust/alin
-          git push hf main --force
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+          git remote add space https://hf:${HF_TOKEN}@huggingface.co/spaces/izgust/alin || echo "remote exists"
+          git push space main --force

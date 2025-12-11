@@ -4,8 +4,9 @@ import { useStore } from './useStore'
 const API_KEY = "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"
 
 // Using the OpenAI-compatible endpoint as requested.
-const PROXY_URL = "/api/hf/v1/chat/completions"
-// Using the explicitly requested supported model.
+// Direct URL because Vite proxy only works in dev mode. 
+// We are accessing the model directly via the Hugging Face Inference API.
+const PROXY_URL = "https://api-inference.huggingface.co/models/meta-llama/Llama-3.2-3B-Instruct/v1/chat/completions"
 const MODEL_ID = "meta-llama/Llama-3.2-3B-Instruct"
 
 export function useAI() {

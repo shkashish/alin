@@ -11,8 +11,8 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true  # <--- FIX 1: Actually download the large file
-
+          lfs: true  
+          
       - name: Push to HF Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}

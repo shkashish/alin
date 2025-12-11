@@ -172,6 +172,7 @@ export function Plant({ id, position, text, response }: PlantProps) {
                 position={[0, height + 3, 0]}
                 onPointerOver={(e) => { e.stopPropagation(); setShowTooltip(true) }}
                 onPointerOut={(e) => { e.stopPropagation(); setShowTooltip(false) }}
+                onClick={(e) => { e.stopPropagation(); setShowTooltip(true) }} // Fix for mobile tap
             >
                 <sphereGeometry args={[1.5, 32, 32]} />
                 <meshBasicMaterial color="#aaddff" transparent opacity={0.3} wireframe={false} />

@@ -20,6 +20,7 @@
     "@tailwindcss/postcss": "^4.1.17",
     "@types/three": "^0.182.0",
     "autoprefixer": "^10.4.22",
+    "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "firebase": "^12.6.0",
     "framer-motion": "^12.23.26",

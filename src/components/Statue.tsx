@@ -1,33 +1,33 @@
-import { useGLTF } from '@react-three/drei'
-import { useLayoutEffect } from 'react'
+import { useRef } from 'react'
+import { useFrame } from '@react-three/fiber'
+import { Float } from '@react-three/drei'
 import * as THREE from 'three'
 
 export function Statue() {
-    const { scene } = useGLTF('/model.glb')
+    const group = useRef<THREE.Group>(null)
 
-    useLayoutEffect(() => {
-        scene.traverse((child: any) => {
-            if (child.isMesh) {
-                child.castShadow = true
-                child.receiveShadow = true
-                // Enhance material if needed
-                if (child.material) {
-                    // Disable internal glow/emission
-                    child.material.emissive = new THREE.Color(0, 0, 0)
-                    child.material.emissiveIntensity = 0
-
-                    child.material.roughness = 0.5
-                    child.material.metalness = 0.1
-                }
-            }
-        })
-    }, [scene])
+    useFrame((state) => {
+        if (group.current) {
+            // Subtle breathing/floating motion for the whole statue
+            group.current.position.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.05
+        }
+    })
 
     return (
-        <group position={[0, 0, 0]}>
-            <primitive object={scene} scale={[4, 4, 4]} position={[0, -1, 0]} />
+        <group ref={group} position={[0, 0, 0]} scale={[2, 2, 2]}>
+            {/* Floating Abstract Head/Symbol */}
+            <Float speed={2} rotationIntensity={0.5} floatIntensity={0.5}>
+                <group position={[0, 1.5, 0]}>
+                    <mesh castShadow receiveShadow>
+                        <octahedronGeometry args={[0.8, 0]} />
+                        <meshStandardMaterial color="#a0c0ff" roughness={0.1} metalness={0.9} emissive="#102040" emissiveIntensity={0.2} />
+                    </mesh>
+                    <mesh rotation={[Math.PI / 4, Math.PI / 4, 0]} castShadow>
+                        <torusGeometry args={[1.2, 0.05, 16, 100]} />
+                        <meshStandardMaterial color="#ffffff" transparent opacity={0.3} side={2} />
+                    </mesh>
+                </group>
+            </Float>
         </group>
     )
 }
-
-useGLTF.preload('/model.glb')

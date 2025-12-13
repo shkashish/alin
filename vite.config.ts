@@ -6,11 +6,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api/hf': {
-        target: 'https://router.huggingface.co',
+      '/api': {
+        target: 'http://localhost:7860',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/hf/, ''),
-        secure: true,
+        secure: false,
       }
     }
   }

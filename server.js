@@ -1,3 +1,5 @@
+// Load environment variables from .env file
+import 'dotenv/config';
 import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -8,6 +10,12 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 7860;
+
+// Debug Middleware: Log all requests
+app.use((req, res, next) => {
+    console.log(`[Server] ${req.method} ${req.path}`);
+    next();
+});
 
 // **********************************************
 // FIX #1: Serve the 'public' directory from the root URL '/'
@@ -23,34 +31,92 @@ app.use(express.json());
 // Serve static files from the React build (frontend)
 app.use(express.static(join(__dirname, 'dist')));
 
+// Health Check
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', time: new Date().toISOString() });
+});
+
 // Secure API Proxy
 app.post('/api/chat', async (req, res) => {
     try {
-        // NOTE: The HF_TOKEN environment variable MUST be set in your Space Settings (Variables section)
         const hfToken = process.env.HF_TOKEN;
         if (!hfToken) {
-            console.error('HF_TOKEN is missing');
-            return res.status(500).json({ error: 'Server misconfiguration: HF_TOKEN missing' });
+            console.error('SERVER ERROR: HF_TOKEN is missing in environment variables. Please check your .env file.');
+            return res.status(500).json({ error: 'Server misconfiguration: HF_TOKEN missing. Create a .env file with HF_TOKEN=...' });
         }
 
-        // We use the Llama-3.2-3B model which is fast and reliable
-        const modelId = "mistralai/Mistral-7B-Instruct-v0.2"; // <-- CHANGE THIS LINE
-        const response = await fetch(`https://router.huggingface.co/models/${modelId}`, {
+        console.log(`[Proxy] Using Token: ${hfToken.substring(0, 5)}...`);
+        console.log('[Proxy] Incoming Request Body:', JSON.stringify(req.body, null, 2));
+
+        // Construct the payload for Hugging Face Router (OpenAI compatible)
+        let payload = { ...req.body };
+        let isLegacyRequest = false;
+
+        // FALLBACK: If the frontend sends the old 'inputs' format (cached), convert it
+        if (!payload.messages && payload.inputs) {
+            console.log('[Proxy] Detected legacy "inputs" format. Converting Request AND Response...');
+            isLegacyRequest = true;
+            payload = {
+                model: "Qwen/Qwen2.5-7B-Instruct",
+                messages: [
+                    { role: "system", content: "You are an ancient sage. Respond in 1-2 short, poetic, wise sentences." },
+                    { role: "user", content: payload.inputs }
+                ],
+                max_tokens: 100,
+                temperature: 0.7
+            };
+        }
+
+        // Ensure model is set if missing
+        if (!payload.model) {
+            payload.model = "Qwen/Qwen2.5-7B-Instruct";
+        }
+
+        // Use Qwen instead of Llama to avoid Gated Repo 404s/Auth issues
+        if (payload.model.includes("Llama") || payload.model.includes("zephyr")) {
+            console.log(`[Proxy] Switching from ${payload.model} to Qwen/Qwen2.5-7B-Instruct to ensure availability.`);
+            payload.model = "Qwen/Qwen2.5-7B-Instruct";
+        }
+
+        console.log(`[Proxy] Forwarding request to Hugging Face Router for model: ${payload.model}`);
+        const url = "https://router.huggingface.co/v1/chat/completions";
+        console.log(`[Proxy] URL: ${url}`);
+        console.log(`[Proxy] Payload:`, JSON.stringify(payload, null, 2));
+
+        // Use the OpenAI-compatible endpoint
+        const response = await fetch(url, {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${hfToken}`,
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify(req.body)
+            body: JSON.stringify(payload)
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            throw new Error(`HF API Error: ${response.status} - ${errorText}`);
+            console.error(`[Proxy] HF API Error: ${response.status} - ${errorText}`);
+
+            if (response.status === 404) {
+                console.error("TIP: 404 usually means the model does not exist or your token cannot access it.");
+            }
+
+            return res.status(response.status).json({ error: `HF API Error: ${errorText}` });
         }
 
         const data = await response.json();
-        res.json(data);
+
+        // If client sent legacy request, it expects legacy response format!
+        if (isLegacyRequest) {
+            const content = data.choices?.[0]?.message?.content || "";
+            // Legacy format was: { generated_text: "..." } or [{ generated_text: "..." }]
+            // We'll send the object format as that's safer for our parser
+            console.log('[Proxy] Converting OpenAI response back to Legacy format for client.');
+            res.json({ generated_text: content });
+        } else {
+            // Send raw OpenAI format
+            res.json(data);
+        }
 
     } catch (error) {
         console.error('Proxy Error:', error);
@@ -60,8 +126,8 @@ app.post('/api/chat', async (req, res) => {
 
 // **********************************************
 // FIX #2: Fallback for SPA routing (serve index.html for unknown routes)
-// Corrected from app.get('*') to app.get('/{*any}') for Express v5 compatibility.
-app.get('/{*any}', (req, res) => { 
+// Using a final middleware to catch everything not handled above
+app.use((req, res) => {
     res.sendFile(join(__dirname, 'dist', 'index.html'));
 });
 // **********************************************

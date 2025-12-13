@@ -58,7 +58,7 @@ export function UI() {
 
                             {/* AI Response or Loading */}
                             <AnimatePresence mode="wait">
-                                {activeMessage.response ? (
+                                {activeMessage.response && !activeMessage.response.includes('[AI Error]') ? (
                                     <motion.div
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}

@@ -7,6 +7,21 @@ function App() {
   const initialize = useStore(state => state.initialize)
 
   useEffect(() => {
+    // Clear Firebase IndexedDB cache on app load to prevent stale data
+    if (typeof indexedDB !== 'undefined') {
+      const dbRequest = indexedDB.databases()
+      dbRequest.then((dbs) => {
+        dbs.forEach(db => {
+          if (db.name && db.name.includes('firebase')) {
+            console.log('[App] Clearing Firebase cache:', db.name)
+            indexedDB.deleteDatabase(db.name)
+          }
+        })
+      }).catch(err => console.log('[App] Could not clear cache:', err))
+    }
+  }, [])
+
+  useEffect(() => {
     const unsubscribe = initialize()
     return () => unsubscribe()
   }, [initialize])

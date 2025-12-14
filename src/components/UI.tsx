@@ -13,8 +13,39 @@ export function UI() {
     // Clean unused variables for lint
     // const isTyping = useStore(state => state.isTyping)
 
-    // Find the latest active message (not yet planted)
-    const activeMessage = messages.find(m => !m.planted)
+    // Find the MOST RECENT unplanted message
+    // Filter to only unplanted messages, then get the last one (most recent)
+    // This prevents showing multiple unplanted messages at once
+    const unplantedMessages = messages.filter(m => !m.planted)
+    const activeMessage = unplantedMessages.length > 0 
+        ? unplantedMessages[unplantedMessages.length - 1] 
+        : undefined
+    
+    // Debug logging
+    useEffect(() => {
+        console.log('[UI] All messages:', messages.map(m => ({
+            id: m.id,
+            text: m.text.substring(0, 20),
+            response: m.response ? m.response.substring(0, 50) : 'NO RESPONSE',
+            planted: m.planted,
+            timestamp: m.timestamp
+        })))
+        console.log('[UI] Unplanted messages:', unplantedMessages.map(m => ({
+            id: m.id,
+            text: m.text.substring(0, 20),
+            response: m.response ? m.response.substring(0, 50) : 'NO RESPONSE',
+            timestamp: m.timestamp
+        })))
+        if (activeMessage) {
+            console.log('[UI] Active message FULL DETAILS:', {
+                id: activeMessage.id,
+                text: activeMessage.text,
+                response: activeMessage.response,
+                planted: activeMessage.planted,
+                timestamp: activeMessage.timestamp
+            })
+        }
+    }, [messages, unplantedMessages, activeMessage])
 
     // Trigger planting flow when response arrives
     useEffect(() => {
@@ -22,7 +53,7 @@ export function UI() {
             // Delay planting so user can read the text
             const timer = setTimeout(() => {
                 startPlanting(activeMessage.id)
-            }, 8000) // 8 seconds to read
+            }, 15000) // 15 seconds to read the longer responses
             return () => clearTimeout(timer)
         }
     }, [activeMessage, isPlanting, startPlanting])
@@ -58,7 +89,7 @@ export function UI() {
 
                             {/* AI Response or Loading */}
                             <AnimatePresence mode="wait">
-                                {activeMessage.response && !activeMessage.response.includes('[AI Error]') ? (
+                                {activeMessage.confirmedResponseId && activeMessage.response && !activeMessage.response.includes('[AI Error]') ? (
                                     <motion.div
                                         initial={{ opacity: 0, x: -20 }}
                                         animate={{ opacity: 1, x: 0 }}

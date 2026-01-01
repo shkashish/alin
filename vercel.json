@@ -1,0 +1,17 @@
+{
+    "version": 2,
+    "rewrites": [
+        {
+            "source": "/api/chat",
+            "destination": "/api/chat.js"
+        },
+        {
+            "source": "/api/health",
+            "destination": "/api/health.js"
+        },
+        {
+            "source": "/((?!api/).*)",
+            "destination": "/index.html"
+        }
+    ]
+}

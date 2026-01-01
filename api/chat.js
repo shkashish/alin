@@ -9,7 +9,7 @@ const TOKEN_CACHE_DURATION = 3600000; // 1 hour
 // Helper to safely initialize Firebase
 function getFirebaseDb() {
     // Prevent multiple initializations (essential for hot reloads/warm starts)
-    if (admin.apps.length > 0) {
+    if (admin.apps && admin.apps.length > 0) {
         return admin.database();
     }
 

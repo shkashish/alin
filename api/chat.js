@@ -1,13 +1,14 @@
 import { HfInference } from '@huggingface/inference';
 import * as admin from 'firebase-admin';
 
-// Global variables to persist across warm invocations
+// Global variables for caching
 let cachedHfToken = null;
 let tokenCacheTime = 0;
-const TOKEN_CACHE_DURATION = 3600000; // Cache for 1 hour
+const TOKEN_CACHE_DURATION = 3600000; // 1 hour
 
 // Helper to safely initialize Firebase
 function getFirebaseDb() {
+    // Prevent multiple initializations (essential for hot reloads/warm starts)
     if (admin.apps.length > 0) {
         return admin.database();
     }
@@ -16,15 +17,18 @@ function getFirebaseDb() {
 
     const jsonContent = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
-    // In local dev, we might verify this differs, but for Vercel prod this is critical
     if (!jsonContent) {
         console.warn('[Firebase] Warning: FIREBASE_SERVICE_ACCOUNT_JSON is missing.');
-        // Allow fallback if user has HF_TOKEN directly in env
         return null;
     }
 
     try {
         const serviceAccount = JSON.parse(jsonContent);
+
+        // CRITICAL FIX: Handle newlines in private key which might be escaped in Vercel Env Vars
+        if (serviceAccount.private_key) {
+            serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+        }
 
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
@@ -35,7 +39,8 @@ function getFirebaseDb() {
         return admin.database();
     } catch (error) {
         console.error('[Firebase] ❌ Initialization Error:', error);
-        throw new Error(`Firebase Initialization Failed: ${error.message}`);
+        // Do not throw here, allow fallback to checks later
+        return null;
     }
 }
 
@@ -46,7 +51,7 @@ async function getHfToken() {
         return cachedHfToken;
     }
 
-    // 2. Check Environment Variable (useful for local dev or simple Vercel setup)
+    // 2. Check Environment Variable (Fastest Fallback)
     if (process.env.HF_TOKEN) {
         cachedHfToken = process.env.HF_TOKEN;
         tokenCacheTime = Date.now();
@@ -55,20 +60,21 @@ async function getHfToken() {
     }
 
     // 3. Get from Firebase
+    const db = getFirebaseDb();
+
+    if (!db) {
+        console.error('[Token] ❌ Firebase not initialized and no HF_TOKEN in env');
+        return null; // Will trigger 500 in handler with clear message
+    }
+
     try {
-        const db = getFirebaseDb();
-
-        if (!db) {
-            console.error('[Token] ❌ Firebase not initialized and no HF_TOKEN in env');
-            return null;
-        }
-
         const ref = db.ref('secrets/hf_token');
         const snapshot = await ref.once('value');
         const token = snapshot.val();
 
         if (!token) {
-            throw new Error('HF_TOKEN retrieved from Firebase is empty');
+            console.error('[Token] Key secrets/hf_token is empty in Firebase');
+            return null;
         }
 
         cachedHfToken = token;
@@ -76,42 +82,43 @@ async function getHfToken() {
         console.log('[Token] ✅ Retrieved HF token from Firebase');
         return token;
     } catch (error) {
-        console.error('[Token] ❌ Failed to get HF token:', error.message);
-        throw error; // Re-throw to be caught by handler
+        console.error('[Token] ❌ Failed to read from Firebase:', error.message);
+        return null;
     }
 }
 
 export default async function handler(req, res) {
-    // Only allow POST
+    // Handle CORS Preflight (if usage ever changes to cross-origin)
+    if (req.method === 'OPTIONS') {
+        return res.status(200).send('ok');
+    }
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
     const requestId = Math.random().toString(36).substring(7);
-    console.log(`[${requestId}] ✅ CHAT REQUEST RECEIVED (Vercel Function)`);
+    console.log(`[${requestId}] ✅ CHAT REQUEST`);
 
     try {
-        // Get HF token
         const hfToken = await getHfToken();
 
         if (!hfToken) {
-            console.error(`[${requestId}] SERVER ERROR: HF_TOKEN not found`);
-            // Return a 500 but with specific error so it's not a "Function Invocation Failed" crash
+            console.error(`[${requestId}] FATAL: HF_TOKEN missing`);
             return res.status(500).json({
                 error: 'Server Configuration Error',
-                details: 'HF_TOKEN could not be retrieved. Check Firebase or Vercel Env Vars.'
+                message: 'Could not retrieve HF_TOKEN from Firebase or Environment.',
+                hint: 'Check FIREBASE_SERVICE_ACCOUNT_JSON or add HF_TOKEN env var.'
             });
         }
 
-        const messages = req.body.messages || [];
-        const temperature = req.body.temperature || 0.7;
-        const maxTokens = req.body.max_tokens || 200;
+        const { messages, temperature = 0.7, max_tokens = 200 } = req.body;
 
-        if (messages.length === 0) {
+        if (!messages || messages.length === 0) {
             return res.status(400).json({ error: 'No messages provided' });
         }
 
-        console.log(`[${requestId}] 📡 Calling HuggingFace Router API...`);
+        console.log(`[${requestId}] 📡 Calling HuggingFace internal router...`);
 
         const hfResponse = await fetch(`https://router.huggingface.co/v1/chat/completions`, {
             method: 'POST',
@@ -121,21 +128,24 @@ export default async function handler(req, res) {
             },
             body: JSON.stringify({
                 model: 'google/gemma-2-9b-it',
-                messages: messages,
-                max_tokens: maxTokens,
-                temperature: temperature
+                messages,
+                max_tokens,
+                temperature
             })
         });
 
         if (!hfResponse.ok) {
             const errorText = await hfResponse.text();
-            console.error(`[${requestId}] ❌ HF Router API Error: ${hfResponse.status} - ${errorText}`);
-            return res.status(hfResponse.status).json({ error: `External API Error: ${errorText}` });
+            console.error(`[${requestId}] ❌ HF Error: ${hfResponse.status} - ${errorText}`);
+            return res.status(hfResponse.status).json({
+                error: 'AI Provider Error',
+                details: errorText
+            });
         }
 
         const response = await hfResponse.json();
 
-        // Return OpenAI-compatible response
+        // Parse OpenAI-compatible response
         const generatedText = response?.choices?.[0]?.message?.content || "";
 
         const openaiResponse = {
@@ -153,23 +163,16 @@ export default async function handler(req, res) {
                     finish_reason: 'stop'
                 }
             ],
-            usage: {
-                prompt_tokens: 0,
-                completion_tokens: 0,
-                total_tokens: 0
-            }
+            usage: response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
         };
 
-        res.status(200).json(openaiResponse);
-        console.log(`[${requestId}] ✅ REQUEST COMPLETE`);
+        return res.status(200).json(openaiResponse);
 
     } catch (error) {
-        console.error(`[${requestId}] ❌ FATAL ERROR:`, error);
-        // Important: Return JSON with error details instead of crashing
-        res.status(500).json({
+        console.error(`[${requestId}] ❌ CRITICAL HANDLER ERROR:`, error);
+        return res.status(500).json({
             error: 'Internal Server Error',
-            message: error.message,
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            message: error.message
         });
     }
 }
